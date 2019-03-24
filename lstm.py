@@ -2,8 +2,6 @@ import numpy as np
 
 from functions import sigmoid, d_sigmoid, tanh, d_tanh, L2_loss, xavier_init, Unit_activation
 
-
-
 class LSTM:
     """Class for LSTM network.
     
@@ -25,25 +23,33 @@ class LSTM:
         self.dactivation = activation.dactivation
         
     def model_forward(self, inputs, targets):
-        states, caches, losses = [], [], []
+        states, caches, preds = [], [], []
         a_prev, c_prev = None, None
+        loss = 0
         for t in range(len(inputs)):
             state, cache = self.cell.forward(inputs[t], a_prev, c_prev)
+            pred = self.activation(state['a_out'])
             states.append(state)
             caches.append(cache)
-            loss = self.loss(self.activation(state['a_out']), targets)
-            losses.append(loss)
+            preds.append(pred)
+            loss += self.loss(pred, targets)
             a_prev, c_prev = state['a_out'], state['c_out']
-        return states, caches, losses
+        return states, caches, preds, loss
 
-    def model_backward(states, caches, losses):
+    def model_backward(self, states, caches, preds, targets):
         assert len(states) == len(caches) == len(losses)
-        orig_params = self.cell.params
-        for state in reversed(range(len(states))):
-            self.cell.state = state
-
-
-
+        d_loss = self.dloss(preds, targets)
+        dact = self.dactivation(states[t]['a_out'])
+        da_next = d_loss * dact
+        dc_next = np.zeros_like((states[0]['dc_out']))
+        grads = {k: np.zeros((self.hidden_dim, 1)) for k in ['c', 'u', 'o', 'f']}
+        for t in reversed(range(len(states))):
+            self.cell.state = states[t]
+            da_next, dc_next, grad_adds = self.cell.backward(da_next, dc_next)
+            for gate in ['c', 'u', 'o', 'f']:
+                grads[gate] += grad_adds[gate]
+        self.cell.update_params(grads)
+        
 class LSTM_unit:
     """Class for LSTM cell.
 
@@ -82,8 +88,8 @@ class LSTM_unit:
 
     def forward(self, x, a_prev, c_prev):
         self.z = np.hstack((x, a_prev))
-        a_prev = a_prev if a_prev is not None else np.zeros(self.hidden_dim)
-        c_prev = c_prev if c_prev is not None else np.zeros(self.hidden_dim)
+        a_prev = a_prev if a_prev is not None else np.zeros((self.hidden_dim))
+        c_prev = c_prev if c_prev is not None else np.zeros((self.hidden_dim))
         cache = {}
         for k, func in self.funcs.items():
             self.state[k], cache[k] = func['a'](np.dot(self.params[k]['w'], self.z) + self.params[k]['b'])
@@ -102,12 +108,16 @@ class LSTM_unit:
         grads['f'] = diff('f') * self.state['c_in'] * dc_out
         dz = np.zeros_like(self.z)
         for gate in ['c', 'u', 'o', 'f']:
-            grads[gate] = np.clip(grads[gate], -self.grad_clip, self.grad_clip)
-            self.params[gate]['w'] += np.outer(grads[gate], self.z)
-            self.params[gate]['b'] += grads[gate]
             dz += np.dot(self.params[gate]['w'].T, grads[gate])
         da_in = dz[self.x_dim:]
         dc_in = dc_out * self.state['f']
-        return da_in, dc_in
+        return da_in, dc_in, grads
+
+
+    def update_params(self, grads):
+        for gate in ['c', 'u', 'o', 'f']:
+            grads[gate] = np.clip(grads[gate], -self.grad_clip, self.grad_clip)
+            self.params[gate]['w'] += np.outer(grads[gate], self.z)
+            self.params[gate]['b'] += grads[gate]
         
 
