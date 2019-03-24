@@ -37,12 +37,12 @@ class LSTM:
         return states, caches, preds, loss
 
     def model_backward(self, states, caches, preds, targets):
-        assert len(states) == len(caches) == len(losses)
+        assert len(states) == len(caches) == len(preds)
         d_loss = self.dloss(preds, targets)
-        dact = self.dactivation(states[t]['a_out'])
+        dact = self.dactivation(states[len(states) - 1]['a_out'])
         da_next = d_loss * dact
         dc_next = np.zeros_like((states[0]['dc_out']))
-        grads = {k: np.zeros((self.hidden_dim, 1)) for k in ['c', 'u', 'o', 'f']}
+        grads = {k: np.zeros((self.cell.hidden_dim, 1)) for k in ['c', 'u', 'o', 'f']}
         for t in reversed(range(len(states))):
             self.cell.state = states[t]
             da_next, dc_next, grad_adds = self.cell.backward(da_next, dc_next)
