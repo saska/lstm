@@ -11,8 +11,8 @@ def d_sigmoid(cache):
 
 def tanh(Z):
     #Also returns original to help with backprop
-    A, _ = sigmoid(Z * 2) * 2
-    return A - 1, Z
+    A, _ = sigmoid(Z * 2) 
+    return A * 2 - 1, Z
     
 def d_tanh(self, dA, cache):
     t, _ = tanh(cache)

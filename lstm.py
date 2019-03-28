@@ -14,27 +14,21 @@ class LSTM:
             as input and return an array of shape x, y. Passed to the LSTM cell.
         peephole: whether to use a peephole connection, boolean. Passed to the LSTM cell.
     """
-    def __init__(self, hidden_dim, x_dim, learning_rate=1e-3, loss=L2_loss, activation=Unit_activation, init=xavier_init, peephole=True):
-        self.cell = LSTM_unit(hidden_dim, x_dim, init=init, peephole=peephole)
+    def __init__(self, hidden_dim, x_dim, batch_size=1, learning_rate=1e-3, loss=L2_loss, activation=Unit_activation, init=xavier_init, peephole=True):
+        self.cell = LSTM_unit(hidden_dim, x_dim, batch_size=batch_size, init=init, peephole=peephole)
         self.learning_rate = learning_rate
         self.loss = loss.loss
         self.dloss = loss.dloss
+        self.batch_size = batch_size
         self.activation = activation.activation
         self.dactivation = activation.dactivation
-        
-    def model_forward(self, inputs, targets):
-        states, caches, preds = [], [], []
-        a_prev, c_prev = None, None
-        loss = 0
-        for t in range(len(inputs)):
-            state, cache = self.cell.forward(inputs[t], a_prev, c_prev)
-            pred = self.activation(state['a_out'])
-            states.append(state)
-            caches.append(cache)
-            preds.append(pred)
-            loss += self.loss(pred, targets)
-            a_prev, c_prev = state['a_out'], state['c_out']
-        return states, caches, preds, loss
+
+    def model_forward(self, inputs, targets, a_prev=None, c_prev=None):
+        state, cache = self.cell.forward(inputs, a_prev, c_prev)
+        pred = self.activation(state['a_out'])
+        loss = self.loss(pred, targets)
+        a_prev, c_prev = state['a_out'], state['c_out']
+        return state, cache, pred, loss
 
     def model_backward(self, states, caches, preds, targets):
         assert len(states) == len(caches) == len(preds)
@@ -61,13 +55,15 @@ class LSTM_unit:
         grad_clip: Gradients will be clipped between -value and value. Pass None to disable clipping 
         peephole: Whether to use a peephole connection, boolean
     """
-    def __init__(self, hidden_dim, x_dim, init=xavier_init, grad_clip=1, peephole=True):
+    def __init__(self, hidden_dim, x_dim, batch_size=1, init=xavier_init, grad_clip=1, peephole=True):
         #TODO figure out peephole again or scrap it
         self.hidden_dim = hidden_dim
         self.x_dim = x_dim
+        self.concat_dim = hidden_dim + x_dim
+        self.batch_size = batch_size
+        self.init = init
         self.init_state()
         self.init_params()
-        self.init = init
         self.grad_clip = grad_clip
         self.peephole = peephole
         self.funcs = {
@@ -78,23 +74,23 @@ class LSTM_unit:
         }
 
     def init_state(self):
-        self.state = {k: np.zeros((self.hidden_dim, 1)) for k in ['c', 'u', 'o', 'f']}
+        self.state = {k: np.zeros((self.hidden_dim, self.batch_size)) for k in ['c', 'u', 'o', 'f']}
 
     def init_params(self):
-        concat_dim = self.hidden_dim + self.x_dim
         self.params = {
-            k: {'w': self.init(self.hidden_dim, concat_dim), 'b': np.zeros((self.hidden_dim, 1))} for k in ['c', 'u', 'o', 'f']
+            k: {'w': self.init(self.hidden_dim, self.concat_dim), 'b': np.zeros((self.hidden_dim, 1))} for k in ['c', 'u', 'o', 'f']
         }
 
     def forward(self, x, a_prev, c_prev):
-        self.z = np.hstack((x, a_prev))
-        a_prev = a_prev if a_prev is not None else np.zeros((self.hidden_dim))
-        c_prev = c_prev if c_prev is not None else np.zeros((self.hidden_dim))
+        a_prev = a_prev if a_prev is not None else np.zeros((self.batch_size, self.hidden_dim))
+        c_prev = c_prev if c_prev is not None else np.zeros((self.batch_size, self.hidden_dim))
+        x = x.reshape((self.batch_size, self.x_dim))
+        self.z = np.hstack((x, a_prev)).reshape((self.concat_dim, self.batch_size))
         cache = {}
         for k, func in self.funcs.items():
             self.state[k], cache[k] = func['a'](np.dot(self.params[k]['w'], self.z) + self.params[k]['b'])
-        self.state['c_out'] = self.state['f'] * c_prev + self.state['i'] * self.state['c']
-        self.state['a_out'] = self.state['o'] * tanh(self.state['c_out'])
+        self.state['c_out'] = self.state['f'] * c_prev.T + self.state['u'] * self.state['c']
+        self.state['a_out'] = self.state['o'] * tanh(self.state['c_out'])[0]
         return self.state, cache
 
 
