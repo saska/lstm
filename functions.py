@@ -27,6 +27,9 @@ class L2_loss:
 
     @classmethod
     def dloss(self, y_hat, y):
+        print(len(y_hat), len(y))
+        print(y_hat)
+        #print(y_hat[0], y[0])
         return (y_hat - y) * 2
 
 class Unit_activation:
@@ -34,9 +37,25 @@ class Unit_activation:
     def activation(self, Z):
         return Z
 
+    @classmethod
     def dactivation(self, Z):
         return np.ones_like(Z)
 
+class Dense:
+    def __init__(self, input_dim, output_dim, activation=tanh, learning_rate=1e-3):
+        self.w = xavier_init((input_dim, output_dim))
+        self.activation = activation
+    
+    def activate(self, Z):
+        return self.activation(np.dot(Z, self.w))
+
+    def dactivate()
+    
+
+#class Sigmoid_activation:
+#    @classmethod
+#    def activation(self, Z)
+
 #def xavier_init(*args):
 #    return np.random.randn(*args) * np.sqrt(2 / sum(*args))
-xavier_init = lambda dim1, dim2: np.random.randn(dim1, dim2) * np.sqrt(2 / (dim1 + dim2))
+xavier_init = lambda dims: np.random.randn(*dims) * np.sqrt(2 / (sum(dims)))

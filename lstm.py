@@ -1,6 +1,20 @@
 import numpy as np
 
-from functions import sigmoid, d_sigmoid, tanh, d_tanh, L2_loss, xavier_init, Unit_activation
+from functions import (L2_loss, Unit_activation, d_sigmoid, d_tanh, sigmoid,
+                       tanh, xavier_init)
+
+class Model:
+    def __init__(layers, loss):
+        self.layers = layers
+        self.loss = loss
+
+    def forward(data, targets):
+        for l in self.layers:
+            
+
+    def backward():
+        for l in reversed(self.layers):
+
 
 class LSTM:
     """Class for LSTM network.
@@ -14,7 +28,8 @@ class LSTM:
             as input and return an array of shape x, y. Passed to the LSTM cell.
         peephole: whether to use a peephole connection, boolean. Passed to the LSTM cell.
     """
-    def __init__(self, hidden_dim, x_dim, batch_size=1, learning_rate=1e-3, loss=L2_loss, activation=Unit_activation, init=xavier_init, peephole=True):
+    def __init__(self, hidden_dim, x_dim, batch_size=1, learning_rate=1e-3, output_dim=1, 
+                       loss=L2_loss, activation=Unit_activation, init=xavier_init, peephole=True):
         self.cell = LSTM_unit(hidden_dim, x_dim, batch_size=batch_size, init=init, peephole=peephole)
         self.learning_rate = learning_rate
         self.loss = loss.loss
@@ -24,11 +39,18 @@ class LSTM:
         self.dactivation = activation.dactivation
 
     def model_forward(self, inputs, targets, a_prev=None, c_prev=None):
-        state, cache = self.cell.forward(inputs, a_prev, c_prev)
-        pred = self.activation(state['a_out'])
-        loss = self.loss(pred, targets)
-        a_prev, c_prev = state['a_out'], state['c_out']
-        return state, cache, pred, loss
+        states, caches, preds, losses = [], [], [], []
+        inputs = [inputs[t,:,:] for t in range(inputs.shape[0])]
+        targets = [targets[t,:].reshape(1, targets.shape[1]) for t in range(targets.shape[0])]
+        for x, y in zip(inputs, targets):
+            state, cache = self.cell.forward(x, a_prev, c_prev)
+            states.append(state)
+            caches.append(cache)
+            pred = self.activation(state['a_out'])
+            preds.append(pred)
+            losses.append(self.loss(pred, y))
+            a_prev, c_prev = state['a_out'], state['c_out']
+        return states, caches, preds, targets
 
     def model_backward(self, states, caches, preds, targets):
         assert len(states) == len(caches) == len(preds)
@@ -78,21 +100,20 @@ class LSTM_unit:
 
     def init_params(self):
         self.params = {
-            k: {'w': self.init(self.hidden_dim, self.concat_dim), 'b': np.zeros((self.hidden_dim, 1))} for k in ['c', 'u', 'o', 'f']
+            k: {'w': self.init((self.hidden_dim, self.concat_dim)), 'b': np.zeros((self.hidden_dim, 1))} for k in ['c', 'u', 'o', 'f']
         }
 
     def forward(self, x, a_prev, c_prev):
-        a_prev = a_prev if a_prev is not None else np.zeros((self.batch_size, self.hidden_dim))
-        c_prev = c_prev if c_prev is not None else np.zeros((self.batch_size, self.hidden_dim))
-        x = x.reshape((self.batch_size, self.x_dim))
-        self.z = np.hstack((x, a_prev)).reshape((self.concat_dim, self.batch_size))
+        a_prev = a_prev if a_prev is not None else np.zeros((self.hidden_dim, self.batch_size))
+        c_prev = c_prev if c_prev is not None else np.zeros((self.hidden_dim, self.batch_size))
+        x = x.reshape((self.x_dim, self.batch_size))
+        self.z = np.vstack((x, a_prev)).reshape((self.concat_dim, self.batch_size))
         cache = {}
         for k, func in self.funcs.items():
             self.state[k], cache[k] = func['a'](np.dot(self.params[k]['w'], self.z) + self.params[k]['b'])
-        self.state['c_out'] = self.state['f'] * c_prev.T + self.state['u'] * self.state['c']
+        self.state['c_out'] = self.state['f'] * c_prev + self.state['u'] * self.state['c']
         self.state['a_out'] = self.state['o'] * tanh(self.state['c_out'])[0]
         return self.state, cache
-
 
     def backward(self, da_next, dc_next):
         dc_out = self.state['o'] * da_next + dc_next
@@ -109,11 +130,8 @@ class LSTM_unit:
         dc_in = dc_out * self.state['f']
         return da_in, dc_in, grads
 
-
     def update_params(self, grads):
         for gate in ['c', 'u', 'o', 'f']:
             grads[gate] = np.clip(grads[gate], -self.grad_clip, self.grad_clip)
             self.params[gate]['w'] += np.outer(grads[gate], self.z)
             self.params[gate]['b'] += grads[gate]
-        
-
