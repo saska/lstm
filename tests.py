@@ -2,24 +2,22 @@ import random
 
 import numpy as np
 
-from functions import Dense
+from functions import Dense, sigmoid, d_sigmoid, tanh, d_tanh
+
 from lstm import LSTM, LSTM_unit
 
 #np.random.seed(1)
 
 def minibatch_gen(data, target, batch_size, shuffle=True):
-    
     if shuffle:
         perm = np.random.permutation(len(target))
         target, data = target[perm], data[perm]
-        
     num_batches = int(np.ceil(len(target) / batch_size))
-    
     for i in range(1,num_batches+1):
         yield data[:,(i-1)*batch_size:i*batch_size,:], \
               target[:,(i-1)*batch_size:i*batch_size]
 
-def test_net_forward_prop():
+def test_net_forward_prop_dims():
     for i in range(10):
         time_steps = np.random.randint(1, 10) * 10
         hidden_dim = np.random.randint(90, 110)
@@ -50,8 +48,8 @@ def test_net_forward_prop():
                 assert cache['u'].shape == (hidden_dim, batch_size)
                 assert cache['o'].shape == (hidden_dim, batch_size)
                 assert cache['f'].shape == (hidden_dim, batch_size)
-               
-def test_net_forward_backward():
+
+def test_lstm_net_forward_backward():
     for i in range(10):
         time_steps = np.random.randint(1, 10) * 10
         hidden_dim = np.random.randint(90, 110)
@@ -66,7 +64,14 @@ def test_net_forward_backward():
         activation = Dense(hidden_dim, output_dim)
         net = LSTM(hidden_dim, x_dim, batch_size=batch_size)
         for data, target in minibatch_gen(arr, targets, batch_size):
+            params = net.cell.params
             net.backward(*(net.forward(data, target)))
+            #check the params were updated
+            params != net.cell.params
+            for k, v in params.items():
+                #check param dims are identical to previous iteration
+                assert v['w'].shape == net.cell.params[k]['w'].shape
+                assert v['b'].shape == net.cell.params[k]['b'].shape
 
 def test_dense_layer_dims():
     for i in range(10):
@@ -89,3 +94,25 @@ def test_dense_layer_dims():
         for l in reversed(layers):
             da = l.backward(da)
             assert(da.shape == (n_examples, l.w.shape[1]))
+
+def _cell_forward_calcs():
+    """
+    """
+    for i in range(10):
+        time_steps = np.random.randint(1, 10) * 10
+        hidden_dim = np.random.randint(90, 110)
+        output_dim = np.random.randint(1,10)
+        x_dim = np.random.randint(5, 20)
+        n_examples = np.random.randint(120,130)
+        batch_size = time_steps // 10
+        arr = np.random.randn(time_steps, n_examples, x_dim)
+        cell = LSTM_unit(hidden_dim, x_dim, batch_size=1)
+        a_prev = None
+        c_prev = None
+        for i in range(30):
+            state, cache = cell.forward(arr, a_prev, c_prev)
+            a_prev = state['a_out']
+            c_prev = state['c_out']
+            z = np.vstack((arr, a_prev))
+            np.assert_almost_equal(cell.state['c'], tanh(np.dot()))
+

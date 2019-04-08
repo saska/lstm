@@ -44,6 +44,8 @@ class Unit_activation:
         return np.ones_like(Z)
 
 class Dense:
+ 
+
     def __init__(self, input_dim, output_dim, activation=tanh, dactivation=d_tanh, learning_rate=1e-3):
         self.w = xavier_init((output_dim, input_dim))
         self.b = np.zeros((output_dim, 1))
@@ -67,7 +69,7 @@ class Dense:
     def update_params(self):
         self.w -= self.dw * self.learning_rate
         self.b -= self.db * self.learning_rate
-
+ 
 #class Sigmoid_activation:
 #    @classmethod
 #    def activation(self, Z)
