@@ -116,3 +116,19 @@ def _cell_forward_calcs():
             z = np.vstack((arr, a_prev))
             np.assert_almost_equal(cell.state['c'], tanh(np.dot()))
 
+def test_net_forward_calcs():
+    np.random.seed(1)
+    time_steps = 7
+    x_dim = 3
+    hidden_dim = 5
+    n_examples = 10
+    x = np.random.randn(time_steps, n_examples, x_dim)
+    net = LSTM(hidden_dim, x_dim, batch_size=n_examples)
+    states, caches, preds, _ = net.forward(x, np.zeros((time_steps, n_examples)), a_prev=None, c_prev=None)
+    with open('states.txt', 'w') as f:
+        f.write(states.__repr__())
+    with open('caches.txt', 'w') as f:
+        f.write(caches.__repr__())
+    with open('preds.txt', 'w') as f:
+        f.write(preds.__repr__())
+
