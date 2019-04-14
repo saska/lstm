@@ -27,8 +27,6 @@ for i in range(10000):
         loss += np.mean(net.epoch(data, targets))
     print('Epoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
 
-
-
 # class Model:
 #     def __init__(layers, loss):
 #         self.layers = layers
