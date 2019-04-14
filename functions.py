@@ -56,5 +56,9 @@ class Dense:
         self.w -= self.dw * self.learning_rate
         self.b -= self.db * self.learning_rate
  
-def xavier_init(*args):
-    return np.random.randn(*args) * np.sqrt(2 / sum(*args))
+def xavier_init(dims):
+    """Xavier initialization.
+    Input: n-tuple of dimensions
+    Returns: Xavier-initialized array of shape dims
+    """
+    return np.random.randn(*dims) * np.sqrt(2 / sum(dims))
