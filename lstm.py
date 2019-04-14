@@ -22,7 +22,7 @@ class LSTM:
         self.loss = loss.loss
         self.dloss = loss.dloss
         self.batch_size = batch_size
-        self.activation = activation(hidden_dim, output_dim)
+        self.activation = activation(hidden_dim, output_dim, learning_rate=learning_rate)
 
     def forward(self, x, y, a_prev=None, c_prev=None):
         """Forward prop.
@@ -42,7 +42,7 @@ class LSTM:
             pred = self.activation.forward(state['a_out'])
             preds.append(pred.T)
             a_prev, c_prev = state['a_out'], state['c_out']
-        return states, caches, np.array(preds), np.array(y)
+        return states, caches, np.stack(preds), np.stack(y)
 
     def backward(self, states, caches, preds, targets):
         """Backprop.
@@ -62,11 +62,12 @@ class LSTM:
                 grads[gate]['w'] += grad_adds[gate]['w']
                 grads[gate]['b'] += grad_adds[gate]['b']
         self.cell.update_params(grads)
+        self.activation.update_params()
         return preds, targets
         
     def epoch(self, x, targets, a_prev=None, c_prev=None):
         preds, targets = self.backward(*self.forward(x, targets, a_prev=a_prev, c_prev=c_prev))
-        return np.array([self.loss(pred, yt) for pred, yt in zip(preds, targets)])
+        return np.stack([self.loss(pred, yt) for pred, yt in zip(preds, targets)])
 
 class LSTM_unit:
     """Class for LSTM cell.
