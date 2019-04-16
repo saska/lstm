@@ -12,20 +12,25 @@ def minibatch_gen(data, target, batch_size, shuffle=True):
         yield data[:,(i-1)*batch_size:i*batch_size,:], \
               target[:,(i-1)*batch_size:i*batch_size,:]
 time_steps = 10
-x_dim = 5
-hidden_dim = 100
+x_dim = 8
+hidden_dim = 8
 output_dim = 8
-n_examples = 100
-batch_size = 100
+n_examples = 8
+batch_size = 8
 x = np.random.randn(time_steps, n_examples, x_dim)
 y = np.random.randn(time_steps, n_examples, output_dim)
-net = LSTM(hidden_dim, x_dim, output_dim=output_dim, batch_size=batch_size, learning_rate=1e-5)
-for i in range(10000):
+x = np.ones((time_steps, n_examples, x_dim))
+y = np.ones((time_steps, n_examples, output_dim))
+net = LSTM(hidden_dim, x_dim, output_dim=output_dim, learning_rate=1e-8)
+for i in range(100000):
     start = time.time()
     loss = 0
     for data, targets in minibatch_gen(x, y, batch_size):
         loss += np.mean(net.epoch(data, targets))
     print('Epoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
+
+print('\nEpoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
+
 
 # class Model:
 #     def __init__(layers, loss):

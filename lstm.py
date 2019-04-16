@@ -15,13 +15,12 @@ class LSTM:
             as input and return an array of shape x, y. Passed to the LSTM cell.
         peephole: whether to use a peephole connection, boolean. Passed to the LSTM cell.
     """
-    def __init__(self, hidden_dim, x_dim, batch_size=1, learning_rate=1e-4, output_dim=1, 
+    def __init__(self, hidden_dim, x_dim, learning_rate=1e-4, output_dim=1, 
                        loss=L2_loss, activation=Dense, init=xavier_init, peephole=True):
-        self.cell = LSTM_unit(hidden_dim, x_dim, batch_size=batch_size, init=init, peephole=peephole, learning_rate=learning_rate)
+        self.cell = LSTM_unit(hidden_dim, x_dim, init=init, peephole=peephole, learning_rate=learning_rate)
         self.learning_rate = learning_rate
         self.loss = loss.loss
         self.dloss = loss.dloss
-        self.batch_size = batch_size
         self.activation = activation(hidden_dim, output_dim, learning_rate=learning_rate)
 
     def forward(self, x, y, a_prev=None, c_prev=None):
@@ -79,12 +78,11 @@ class LSTM_unit:
         grad_clip: Gradients will be clipped between -value and value. Pass None to disable clipping 
         peephole: Whether to use a peephole connection, boolean
     """
-    def __init__(self, hidden_dim, x_dim, batch_size=1, init=xavier_init, grad_clip=1, peephole=True, learning_rate=1e-4):
+    def __init__(self, hidden_dim, x_dim, init=xavier_init, grad_clip=1, peephole=True, learning_rate=1e-4):
         #TODO figure out peephole again or scrap it
         self.hidden_dim = hidden_dim
         self.x_dim = x_dim
         self.concat_dim = hidden_dim + x_dim
-        self.batch_size = batch_size
         self.init = init
         self.init_params()
         self.grad_clip = grad_clip
@@ -112,12 +110,11 @@ class LSTM_unit:
         }   
 
     def forward(self, x, a_prev, c_prev):
-        a_prev = a_prev if a_prev is not None else np.zeros((self.hidden_dim, self.batch_size))
-        c_prev = c_prev if c_prev is not None else np.zeros((self.hidden_dim, self.batch_size))
+        a_prev = a_prev if a_prev is not None else np.zeros((self.hidden_dim, x.shape[0]))
+        c_prev = c_prev if c_prev is not None else np.zeros((self.hidden_dim, x.shape[0]))
         state = {}
         state['c_in'] = c_prev
-        x = x.reshape((self.x_dim, self.batch_size))
-        state['z'] = np.vstack((x, a_prev)).reshape((self.concat_dim, self.batch_size))
+        state['z'] = np.vstack((x.T, a_prev))
         cache = {}
         for k, func in self.funcs.items():
             state[k], cache[k] = func['a'](np.dot(self.params[k]['w'], state['z']) + self.params[k]['b'])

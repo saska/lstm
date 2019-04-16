@@ -38,7 +38,7 @@ def test_net_forward_prop_dims():
         targets = np.random.randn(time_steps, n_examples, output_dim)
         assert len(targets) == time_steps
         activation = Dense(hidden_dim, output_dim)
-        net = LSTM(hidden_dim, x_dim, batch_size=batch_size)
+        net = LSTM(hidden_dim, x_dim)
         for data, target in minibatch_gen(arr, targets, batch_size):
             states, caches, preds, losses = net.forward(data, target)
             assert len(states) == time_steps
@@ -67,7 +67,7 @@ def test_lstm_net_forward_backward():
         targets = np.random.randn(time_steps, n_examples, output_dim)
         assert len(targets) == time_steps
         activation = Dense(hidden_dim, output_dim)
-        net = LSTM(hidden_dim, x_dim, output_dim=output_dim, batch_size=batch_size)
+        net = LSTM(hidden_dim, x_dim, output_dim=output_dim)
         for data, target in minibatch_gen(arr, targets, batch_size):
             params = net.cell.params
             net.backward(*(net.forward(data, target)))
@@ -108,7 +108,7 @@ def _cell_forward_calcs():
          x_dim, n_examples, batch_size) = random_params()
 
         arr = np.random.randn(n_examples, x_dim)
-        cell = LSTM_unit(hidden_dim, x_dim, batch_size=n_examples)
+        cell = LSTM_unit(hidden_dim, x_dim)
         a_prev = None
         c_prev = None
         for i in range(30):
@@ -124,12 +124,10 @@ def test_grads():
     #TODO currently does nothing to actually test gradients
     (time_steps, hidden_dim, output_dim,
      x_dim, n_examples, batch_size) = random_params()
-    batch_size = time_steps // 10
     arr = np.random.randn(time_steps, n_examples, x_dim)
     targets = np.random.randn(time_steps, n_examples, output_dim)
-    activation = Dense(hidden_dim, output_dim)
     #Set learning rate to 0 to not update any grads
-    net = LSTM(hidden_dim, x_dim, batch_size=n_examples, 
+    net = LSTM(hidden_dim, x_dim,
                output_dim=output_dim, learning_rate=0)
     delta = 1e-5
     for i in range(TEST_COUNT):
