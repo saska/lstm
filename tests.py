@@ -1,13 +1,12 @@
+import copy
 import random
 
 import numpy as np
 
-from functions import Dense, sigmoid, d_sigmoid, tanh, d_tanh, L2_loss
-
+from functions import Dense, L2_loss, d_sigmoid, d_tanh, sigmoid, tanh
 from lstm import LSTM, LSTM_unit
 
-
-TEST_COUNT = 10 #How many times most tests are ran
+TEST_COUNT = 10 # How many times most tests are ran
 def random_params():
     time_steps = np.random.randint(1, 10) * 10
     hidden_dim = np.random.randint(90, 110)
@@ -31,12 +30,14 @@ def minibatch_gen(data, target, batch_size, shuffle=True):
 
 def test_net_forward_prop_dims():
     for i in range(TEST_COUNT):
-        (time_steps, hidden_dim, output_dim,
-         x_dim, n_examples, batch_size) = random_params()
+        time_steps, hidden_dim, output_dim, x_dim, n_examples, batch_size = random_params()
+
         arr = np.random.randn(time_steps, n_examples, x_dim)
         assert len(arr) == time_steps
+
         targets = np.random.randn(time_steps, n_examples, output_dim)
         assert len(targets) == time_steps
+
         activation = Dense(hidden_dim, output_dim)
         net = LSTM(hidden_dim, x_dim)
         for data, target in minibatch_gen(arr, targets, batch_size):
@@ -59,13 +60,14 @@ def test_net_forward_prop_dims():
 
 def test_lstm_net_forward_backward():
     for i in range(TEST_COUNT):
-        (time_steps, hidden_dim, output_dim,
-         x_dim, n_examples, batch_size) = random_params()
+        time_steps, hidden_dim, output_dim, x_dim, n_examples, batch_size = random_params()
 
         arr = np.random.randn(time_steps, n_examples, x_dim)
         assert len(arr) == time_steps
+
         targets = np.random.randn(time_steps, n_examples, output_dim)
         assert len(targets) == time_steps
+
         activation = Dense(hidden_dim, output_dim)
         net = LSTM(hidden_dim, x_dim, output_dim=output_dim)
         for data, target in minibatch_gen(arr, targets, batch_size):
@@ -90,11 +92,13 @@ def test_dense_layer_dims():
             layers.append(Dense(dim_list[i], dim_list[i+1]))
         x = np.random.randn(n_examples, x_dim)
         a = x.T
-        #test forward
+
+        # test forward
         for l in layers:
             a = l.forward(a)
             assert(a.shape == (l.w.shape[0], n_examples))
-        #test backward
+
+        # test backward
         da = a.T
         for l in reversed(layers):
             da = l.backward(da)
@@ -104,8 +108,7 @@ def _cell_forward_calcs():
     """TODO This doesn't do anything yet
     """
     for i in range(TEST_COUNT):
-        (time_steps, hidden_dim, output_dim,
-         x_dim, n_examples, batch_size) = random_params()
+        time_steps, hidden_dim, output_dim, x_dim, n_examples, batch_size = random_params()
 
         arr = np.random.randn(n_examples, x_dim)
         cell = LSTM_unit(hidden_dim, x_dim)
@@ -115,18 +118,18 @@ def _cell_forward_calcs():
             state, cache = cell.forward(arr, a_prev, c_prev)
             a_prev = state['a_out']
             c_prev = state['c_out']
-            np.assert_almost_equal(cell.state['c'], tanh(np.dot()))
+            np.assert_almost_equal(state['c'], tanh(np.dot()))
 
 def test_net_forward_calcs():
     pass
 
 def test_grads():
-    #TODO currently does nothing to actually test gradients
-    (time_steps, hidden_dim, output_dim,
-     x_dim, n_examples, batch_size) = random_params()
+    # TODO currently does nothing to actually test gradients
+    time_steps, hidden_dim, output_dim, x_dim, n_examples, batch_size = random_params()
+
     arr = np.random.randn(time_steps, n_examples, x_dim)
     targets = np.random.randn(time_steps, n_examples, output_dim)
-    #Set learning rate to 0 to not update any grads
+    # Set learning rate to 0 to not update any grads
     net = LSTM(hidden_dim, x_dim,
                output_dim=output_dim, learning_rate=0)
     delta = 1e-5
@@ -165,34 +168,38 @@ def test_L2_loss_gradient():
     analytical_grads = dloss(y_hat, y)
     np.testing.assert_array_almost_equal(num_grads, analytical_grads, decimal=8)
 
-def _Dense_gradient():
-    #TODO, hence leaving the test-part out
-    for i in range(TEST_COUNT):
-        (time_steps, hidden_dim, output_dim,
-            x_dim, n_examples, batch_size) = random_params()
-        delta = 1e-5
-        l = Dense(x_dim, output_dim)
+def get_num_grad(net, param, idx, delta, arr, targets):
+    paramcopy = copy.deepcopy(net.cell.params)
+    singlecopy = param.flat[idx]
+    param.flat[idx] = singlecopy + delta
+    plus_loss = net.epoch(arr, targets)[-1]
+    net.cell.params = paramcopy
+    param.flat[idx] = singlecopy - delta
+    minus_loss = net.epoch(arr, targets)[-1]
+    param.flat[idx] = singlecopy
+    num_grad = (plus_loss - minus_loss) / (2 * delta)
+    return num_grad
 
-        a = np.random.randn(x_dim, n_examples)
-        #Ugliest thing I've ever written, might break with any change
-        orig_w = l.w.copy()
-        orig_b = l.b.copy()
-        num_grad = (l.forward(a - delta) - l.forward(a + delta)) / (2 * delta)
-        l.w += delta
-        w_grad_tmp = l.forward(a)
-        l.w -= 2 * delta
-        w_grad = (w_grad_tmp - l.forward(a)) / (2 * delta)
-        l.w = orig_w
-        l.b += delta
-        b_grad_tmp = l.forward(a)
-        l.b -= 2 * delta
-        b_grad = (b_grad_tmp - l.forward(a)) / (2 * delta)
-        l.b = orig_b
-        #This needs to be run last since it resets layer cache
-        a = l.forward(a)
-        da = l.backward(a.T)
+def test_lstm_grads():
+    delta = 1e-5
+    (time_steps, hidden_dim, output_dim,
+     x_dim, n_examples, batch_size) = random_params()
+    arr = np.random.randn(time_steps, 1, x_dim)
+    targets = np.random.randn(time_steps, 1, 1)
+    net = LSTM(hidden_dim, x_dim, output_dim=1, grad_clip=None, grad_check=True, learning_rate=1e-15)
+    _ = net.epoch(arr, targets)
+    for gate in ['c', 'u', 'o', 'f']:
+        for p in ['w', 'b']:
+            print(np.mean(net.cell.grads[gate][p]))
+            g_cp = np.copy(net.cell.grads[gate][p])
+            idx = np.random.randint(0, len(g_cp))
+            num_grad = get_num_grad(net, net.cell.params[gate][p], idx, delta, arr, targets)
+            analytical_grad = g_cp.flat[idx]
 
-        #np.testing.assert_almost_equal(num_grad, da)
-        np.testing.assert_almost_equal(w_grad, l.dw)
-        np.testing.assert_almost_equal(b_grad, l.db)
-
+            err_sum = abs(num_grad + analytical_grad)
+            print(num_grad, analytical_grad)
+            try:
+                relative_err = abs(analytical_grad - num_grad) / err_sum
+            except ZeroDivisionError:
+                relative_err = abs(analytical_grad - num_grad) / (err_sum + 1e-9)
+            assert relative_err < 1e-6
