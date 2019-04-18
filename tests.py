@@ -6,7 +6,7 @@ import numpy as np
 from functions import Dense, L2_loss, d_sigmoid, d_tanh, sigmoid, tanh
 from lstm import LSTM, LSTM_unit
 
-TEST_COUNT = 10 # How many times most tests are ran
+TEST_COUNT = 2 # How many times most tests are ran
 def random_params():
     time_steps = np.random.randint(1, 10) * 10
     hidden_dim = np.random.randint(90, 110)
@@ -182,6 +182,7 @@ def get_num_grad(net, param, idx, delta, arr, targets):
 
 def test_lstm_grads():
     delta = 1e-5
+    np.random.seed(1)
     (time_steps, hidden_dim, output_dim,
      x_dim, n_examples, batch_size) = random_params()
     arr = np.random.randn(time_steps, 1, x_dim)

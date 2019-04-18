@@ -54,11 +54,13 @@ class LSTM:
             targets: list of labels with the same shape as preds
             grad_check: if True, cell will store pre-clipped grads in cell.grads on param update
         """
-        d_loss = np.mean(self.dloss(preds, targets), axis=0).T
-        da_next = self.activation.backward(d_loss.T).T
+        d_loss = self.dloss(preds, targets)
+        das = [self.activation.backward(d_loss[t]).T for t in range(d_loss.shape[0])]
+        da_next = np.zeros_like((das[0]))
         dc_next = np.zeros_like((states[0]['c_out']))
         grads = self.cell.init_grads()
-        for state in reversed(states):
+        for state, da in zip(reversed(states), reversed(das)):
+            da_next += da
             da_next, dc_next, grad_adds = self.cell.backward(state, da_next, dc_next)
             for gate in ['c', 'u', 'o', 'f']:
                 grads[gate]['w'] += grad_adds[gate]['w']
@@ -118,7 +120,7 @@ class LSTM_unit:
         
         state = {}
         state['c_in'] = c_prev
-        state['z'] = np.vstack((x.T, a_prev))
+        state['z'] = np.vstack((a_prev, x.T))
 
         cache = {}
         for k, func in self.funcs.items():
@@ -130,22 +132,20 @@ class LSTM_unit:
         return state, cache
 
     def backward(self, state, da_next, dc_next):
-        dc_out = state['o'] * da_next + dc_next
+        dc_out = state['o'] * da_next * d_tanh(state['c_out']) + dc_next
         grads = self.init_grads()
 
         d = {}
-        d['c'] = state['c'] * (1 - state['c']) * state['u'] * dc_out
-        d['u'] = state['u'] * (1 - state['u']) * state['c_out'] * dc_out
-        d['o'] = state['o'] * (1 - state['o']) * state['c'] * da_next
+        d['c'] = (1 - state['c']**2) * state['u'] * dc_out
+        d['u'] = state['u'] * (1 - state['u']) * state['c'] * dc_out
+        d['o'] = state['o'] * (1 - state['o']) * tanh(state['c_out'])[0] * da_next
         d['f'] = state['f'] * (1 - state['f']) * state['c_in'] * dc_out
-
-        dz = np.zeros_like(state['z'])
+        da_in = np.zeros_like(da_next)
         for gate in ['c', 'u', 'o', 'f']:
-            dz += np.dot(self.params[gate]['w'].T, d[gate])
+            da_in += np.dot(self.params[gate]['w'].T[:self.hidden_dim,:], d[gate])
             grads[gate]['b'] = np.sum(d[gate], axis=1, keepdims=True)
             grads[gate]['w'] = np.dot(d[gate], state['z'].T)
-
-        da_in = dz[self.x_dim:]
+        
         dc_in = dc_out * state['f']
 
         return da_in, dc_in, grads
