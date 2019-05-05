@@ -14,11 +14,13 @@ class LSTM:
         init: initialization function, should take two dimensions x and y (integers) 
             as input and return an array of shape x, y. Passed to the LSTM cell.
         peephole: whether to use a peephole connection, boolean. Passed to the LSTM cell.
+        grad_check: if True, cell will store pre-clipped grads in cell.grads on param update
     """
-    def __init__(self, hidden_dim, x_dim, learning_rate=1e-4, output_dim=1, 
-                       loss=L2_loss, activation=Dense, init=xavier_init, peephole=True):
-        self.cell = LSTM_unit(hidden_dim, x_dim, init=init, peephole=peephole, learning_rate=learning_rate)
+    def __init__(self, hidden_dim, x_dim, learning_rate=1e-4, output_dim=1, grad_clip=None,
+                       loss=L2_loss, activation=Dense, init=xavier_init, peephole=True, grad_check=False):
+        self.cell = LSTM_unit(hidden_dim, x_dim, init=init, peephole=peephole, learning_rate=learning_rate, grad_check=grad_check)
         self.learning_rate = learning_rate
+        self.grad_clip = grad_clip
         self.loss = loss.loss
         self.dloss = loss.dloss
         self.activation = activation(hidden_dim, output_dim, learning_rate=learning_rate)
@@ -50,18 +52,21 @@ class LSTM:
             caches: TODO what do I even need these for
             preds: list of predictions (y_hat) of shape (output_dim, batch_size) #TODO check if it's batch_size, output_dim after all I'm too tired
             targets: list of labels with the same shape as preds
+            grad_check: if True, cell will store pre-clipped grads in cell.grads on param update
         """
-        d_loss = np.mean(self.dloss(preds, targets), axis=0).T
-        da_next = self.activation.backward(d_loss.T).T
+        d_loss = self.dloss(preds, targets)
+        das = [self.activation.backward(d_loss[t]).T for t in range(d_loss.shape[0])]
+        da_next = np.zeros_like((das[0]))
         dc_next = np.zeros_like((states[0]['c_out']))
         grads = self.cell.init_grads()
-        for state in reversed(states):
+        for state, da in zip(reversed(states), reversed(das)):
+            da_next += da
             da_next, dc_next, grad_adds = self.cell.backward(state, da_next, dc_next)
             for gate in ['c', 'u', 'o', 'f']:
                 grads[gate]['w'] += grad_adds[gate]['w']
                 grads[gate]['b'] += grad_adds[gate]['b']
-        self.cell.update_params(grads)
-        self.activation.update_params()
+        self.cell.update_params(grads, self.grad_clip)
+        self.activation.update_params(grad_clip=self.grad_clip)
         return preds, targets
         
     def epoch(self, x, targets, a_prev=None, c_prev=None):
@@ -78,16 +83,16 @@ class LSTM_unit:
         grad_clip: Gradients will be clipped between -value and value. Pass None to disable clipping 
         peephole: Whether to use a peephole connection, boolean
     """
-    def __init__(self, hidden_dim, x_dim, init=xavier_init, grad_clip=1, peephole=True, learning_rate=1e-4):
+    def __init__(self, hidden_dim, x_dim, init=xavier_init, peephole=True, learning_rate=1e-4, grad_check=False):
         #TODO figure out peephole again or scrap it
         self.hidden_dim = hidden_dim
         self.x_dim = x_dim
         self.concat_dim = hidden_dim + x_dim
         self.init = init
         self.init_params()
-        self.grad_clip = grad_clip
         self.peephole = peephole
         self.learning_rate = learning_rate
+        self.grad_check = grad_check
         self.funcs = {
             'c': {'a': tanh, 'd': d_tanh},
             'u': {'a': sigmoid, 'd': d_sigmoid},
@@ -112,36 +117,45 @@ class LSTM_unit:
     def forward(self, x, a_prev, c_prev):
         a_prev = a_prev if a_prev is not None else np.zeros((self.hidden_dim, x.shape[0]))
         c_prev = c_prev if c_prev is not None else np.zeros((self.hidden_dim, x.shape[0]))
+        
         state = {}
         state['c_in'] = c_prev
-        state['z'] = np.vstack((x.T, a_prev))
+        state['z'] = np.vstack((a_prev, x.T))
+
         cache = {}
         for k, func in self.funcs.items():
             state[k], cache[k] = func['a'](np.dot(self.params[k]['w'], state['z']) + self.params[k]['b'])
+        
         state['c_out'] = state['f'] * c_prev + state['u'] * state['c']
         state['a_out'] = state['o'] * tanh(state['c_out'])[0]
+        
         return state, cache
 
     def backward(self, state, da_next, dc_next):
-        dc_out = state['o'] * da_next + dc_next
+        dc_out = state['o'] * da_next * d_tanh(state['c_out']) + dc_next
         grads = self.init_grads()
+
         d = {}
-        d['c'] = state['c'] * (1 - state['c']) * state['u'] * dc_out
-        d['u'] = state['u'] * (1 - state['u']) * state['c_out'] * dc_out
-        d['o'] = state['o'] * (1 - state['o']) * state['c'] * da_next
+        d['c'] = (1 - state['c']**2) * state['u'] * dc_out
+        d['u'] = state['u'] * (1 - state['u']) * state['c'] * dc_out
+        d['o'] = state['o'] * (1 - state['o']) * tanh(state['c_out'])[0] * da_next
         d['f'] = state['f'] * (1 - state['f']) * state['c_in'] * dc_out
-        dz = np.zeros_like(state['z'])
+        da_in = np.zeros_like(da_next)
         for gate in ['c', 'u', 'o', 'f']:
-            dz += np.dot(self.params[gate]['w'].T, d[gate])
+            da_in += np.dot(self.params[gate]['w'].T[:self.hidden_dim,:], d[gate])
             grads[gate]['b'] = np.sum(d[gate], axis=1, keepdims=True)
             grads[gate]['w'] = np.dot(d[gate], state['z'].T)
-        da_in = dz[self.x_dim:]
+        
         dc_in = dc_out * state['f']
+
         return da_in, dc_in, grads
 
-    def update_params(self, grads):
+    def update_params(self, grads, clip=None):
+        if self.grad_check:
+            self.grads = grads
         for gate in ['c', 'u', 'o', 'f']:
-            grads[gate]['w'] = np.clip(grads[gate]['w'], -self.grad_clip, self.grad_clip)
-            grads[gate]['b'] = np.clip(grads[gate]['b'], -self.grad_clip, self.grad_clip)
+            if clip is not None:
+                grads[gate]['w'] = np.clip(grads[gate]['w'], -clip, clip)
+                grads[gate]['b'] = np.clip(grads[gate]['b'], -clip, clip)
             self.params[gate]['w'] -= grads[gate]['w'] * self.learning_rate
             self.params[gate]['b'] -= grads[gate]['b'] * self.learning_rate

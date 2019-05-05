@@ -48,11 +48,14 @@ class Dense:
     def backward(self, da, cache=None):
         cache = self.cache if cache is None else cache
         dZ = da * self.dactivation(cache.T)
-        self.dw += 1/self.a_prev.shape[0] * np.dot(self.a_prev, dZ).T
-        self.db += 1/self.a_prev.shape[0] * np.sum(dZ, keepdims=True)
+        self.dw = 1/self.a_prev.shape[0] * np.dot(self.a_prev, dZ).T
+        self.db = 1/self.a_prev.shape[0] * np.sum(dZ, keepdims=True)
         return np.dot(dZ, self.w)
 
-    def update_params(self):
+    def update_params(self, grad_clip=None):
+        if grad_clip is not None:
+            self.dw = np.clip(self.dw, -grad_clip, grad_clip)
+            self.db = np.clip(self.db, -grad_clip, grad_clip)
         self.w -= self.dw * self.learning_rate
         self.b -= self.db * self.learning_rate
  
