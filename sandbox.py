@@ -13,6 +13,7 @@ with open(apipath, 'r') as f:
     apikey = f.read()
 
 #quandl.ApiConfig.api_key = apikey
+from matplotlib import pyplot as plt
 
 def minibatch_gen(data, target, batch_size, shuffle=True):
     if shuffle:
