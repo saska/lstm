@@ -36,7 +36,7 @@ class LSTM:
         states, caches, preds = [], [], []
         x = [x[t,:,:] for t in range(x.shape[0])]
         y = [y[t,:,:] for t in range(y.shape[0])]
-        for xt, yt in zip(x, y):
+        for xt in x:
             state, cache = self.cell.forward(xt, a_prev, c_prev)
             states.append(state)
             caches.append(cache)
@@ -49,8 +49,8 @@ class LSTM:
         """Backprop.
         Inputs:
             states: list of dictionaries containing states from LSTM_unit
-            caches: TODO what do I even need these for
-            preds: list of predictions (y_hat) of shape (output_dim, batch_size) #TODO check if it's batch_size, output_dim after all I'm too tired
+            caches: caches, not needed - prime for a refactor
+            preds: list of predictions (y_hat) of shape (output_dim, batch_size)
             targets: list of labels with the same shape as preds
             grad_check: if True, cell will store pre-clipped grads in cell.grads on param update
         """
@@ -66,7 +66,7 @@ class LSTM:
                 grads[gate]['w'] += grad_adds[gate]['w']
                 grads[gate]['b'] += grad_adds[gate]['b']
         self.cell.update_params(grads, self.grad_clip)
-        self.activation.update_params(grad_clip=self.grad_clip)
+        self.activation.update_params()
         return preds, targets
         
     def epoch(self, x, targets, a_prev=None, c_prev=None):

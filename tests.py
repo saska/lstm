@@ -180,7 +180,7 @@ def get_num_grad(net, param, idx, delta, arr, targets):
     num_grad = (plus_loss - minus_loss) / (2 * delta)
     return num_grad
 
-def test_lstm_grads():
+def _lstm_grads():
     delta = 1e-5
     np.random.seed(1)
     (time_steps, hidden_dim, output_dim,
@@ -202,5 +202,5 @@ def test_lstm_grads():
             try:
                 relative_err = abs(analytical_grad - num_grad) / err_sum
             except ZeroDivisionError:
-            relative_err = abs(analytical_grad - num_grad) / (err_sum + 1e-9)
+                relative_err = abs(analytical_grad - num_grad) / (err_sum + 1e-9)
             assert relative_err < 1e-6

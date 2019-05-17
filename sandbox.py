@@ -8,9 +8,9 @@ import os
 
 #import quandl
 from lstm import LSTM
-apipath = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "quandl", "apikey.txt"))
-with open(apipath, 'r') as f:
-    apikey = f.read()
+#apipath = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "quandl", "apikey.txt"))
+#with open(apipath, 'r') as f:
+#    apikey = f.read()
 
 #quandl.ApiConfig.api_key = apikey
 from matplotlib import pyplot as plt
@@ -165,8 +165,66 @@ def courseratest():
             grads[gate]['w'] += grad_adds[gate]['w']
             grads[gate]['b'] += grad_adds[gate]['b']
         print(grad_adds['f']['b'])
+
+def stora_upm_pair():
+
+    time_steps = 10
+    x_dim = 20
+    hidden_dim = 40
+    output_dim = 1
+    #n_examples = 2048
+    #batch_size = 256
+
+    def to_float(x):
+        if type(x) == str:
+            x = x.replace(',','.')
+            return float(x)
+        elif type(x) == int:
+            return float(x)
+        return x
+    
+    data_path = os.path.join("..", "data", "stora_upm_expl_data")
+    upm = pd.read_csv(os.path.join(data_path, 'UPM-1990-01-01-2019-04-24.csv'), sep=';')
+    stora = pd.read_csv(os.path.join(data_path, 'STERV-1990-01-01-2019-04-24.csv'), sep=';')
+    upm.set_index('Date', inplace=True)
+    stora.set_index('Date', inplace=True)
+    upm = upm.applymap(to_float)
+    stora = stora.applymap(to_float)
+    stora.drop('Unnamed: 11', axis=1, inplace=True)
+    upm.drop('Unnamed: 11', axis=1, inplace=True)
+    x = pd.concat([stora, upm], axis=1)
+    data = np.array(x.iloc[::-1].fillna(0))
+    data = data.reshape(data.shape[0], 1, data.shape[1])
+    diffs = upm['Closing price'] - stora['Closing price']
+    diffs = (diffs / diffs[-1]).diff(periods=1)
+    def target_var_map(x):
+        if x < 0:
+            return -1
+        elif x > 0:
+            return 1
+        return 0
+    targets = diffs.map(target_var_map).iloc[::-1]
+    targets = np.array(targets).reshape(data.shape[0], 1, 1)
+
+
+    net = LSTM(hidden_dim, x_dim, output_dim=output_dim, learning_rate=1e-4)
+    losses = []
+    for i in range(5000):
+        start = time.time()
+        loss = 0
+        loss += np.mean(net.epoch(data, targets))
+        losses.append(loss)
+        print('Epoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
+        if i % 500 == 0:
+            with open('stora_upm_net.pkl', 'wb') as f:
+                pickle.dump(net, f)
+    print('\nEpoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
+    plt.plot(losses)
+    plt.show()
+
+
 if __name__ == "__main__":
-    simplefunc()
+    courseratest()
 
 # class Model:
 #     def __init__(layers, loss):

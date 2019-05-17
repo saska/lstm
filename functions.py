@@ -27,6 +27,26 @@ class L2_loss:
     def dloss(self, y_hat, y):
         return (y_hat - y) * 2
 
+class CrossEntropyLoss:
+    @classmethod
+    def loss(self, y_hat, y):
+        return -np.mean(y*np.log(y_hat) + (1-y)*np.log(1-y_hat))
+
+    @classmethod
+    def dloss(self, y_hat, y):
+        return -(np.divide(y, y_hat) - np.divide(1-y, 1-y_hat))
+
+
+class Unit_activation:
+    def __init__(self, *args):
+        pass
+    
+    def forward(self, a_prev):
+        return a_prev
+
+    def backward(self, da):
+        return np.ones_like(da)
+
 class Dense:
     """Class for dense (fully connected) layer.
     
@@ -48,20 +68,22 @@ class Dense:
     def backward(self, da, cache=None):
         cache = self.cache if cache is None else cache
         dZ = da * self.dactivation(cache.T)
-        self.dw = 1/self.a_prev.shape[0] * np.dot(self.a_prev, dZ).T
-        self.db = 1/self.a_prev.shape[0] * np.sum(dZ, keepdims=True)
+        self.dw += 1/self.a_prev.shape[0] * np.dot(self.a_prev, dZ).T
+        self.db += 1/self.a_prev.shape[0] * np.sum(dZ, keepdims=True)
+        self.dw = np.clip(self.dw, -8, 8)
+        self.db = np.clip(self.db, -8, 8)
         return np.dot(dZ, self.w)
 
-    def update_params(self, grad_clip=None):
-        if grad_clip is not None:
-            self.dw = np.clip(self.dw, -grad_clip, grad_clip)
-            self.db = np.clip(self.db, -grad_clip, grad_clip)
+    def update_params(self):
         self.w -= self.dw * self.learning_rate
         self.b -= self.db * self.learning_rate
- 
+
+        self.dw = np.zeros_like(self.dw)
+        self.db = np.zeros_like(self.db)
+    
 def xavier_init(dims):
     """Xavier initialization.
     Input: n-tuple of dimensions
-    Returns: Xavier-initialized array of shape dims
+    Returns: Xavier-initialized (N~(0,1/n)) array of shape dims
     """
     return np.random.randn(*dims) * np.sqrt(2 / sum(dims))
