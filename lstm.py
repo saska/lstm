@@ -6,15 +6,15 @@ from functions import (L2_loss, d_sigmoid, d_tanh, sigmoid,
 class LSTM:
     """Class for LSTM network.
     
-    Inputs:
-        hidden_dim: size of the hidden layer, passed to the LSTM cell
-        x_dim: size of network inputs (data passed to the network)
+    Args:
+        hidden_dim: size of the hidden layer, passed to the LSTM cell.
+        x_dim: size of network inputs (data passed to the network).
         loss: loss class, consisting of a loss function (loss) and it's derivative 
-            w.r.t. prediction (dloss) as class methods. For an example, see functions.py
+            w.r.t. prediction (dloss) as class methods. For an example, see functions.py.
         init: initialization function, should take two dimensions x and y (integers) 
             as input and return an array of shape x, y. Passed to the LSTM cell.
         peephole: whether to use a peephole connection, boolean. Passed to the LSTM cell.
-        grad_check: if True, cell will store pre-clipped grads in cell.grads on param update
+        grad_check: if True, cell will store pre-clipped grads in cell.grads on param update.
     """
     def __init__(self, hidden_dim, x_dim, learning_rate=1e-4, output_dim=1, grad_clip=None,
                        loss=L2_loss, activation=Dense, init=xavier_init, peephole=True, grad_check=False):
@@ -27,11 +27,17 @@ class LSTM:
 
     def forward(self, x, y, a_prev=None, c_prev=None):
         """Forward prop.
-        Inputs:
-            x: Input array to network. Shape (time_steps, batch_size, x_dim)
-            y: Post-activation target variables. Shape (time_steps, batch_size, output_dim)
+        Args:
+            x: Input array to network. Shape (time_steps, batch_size, x_dim).
+            y: Post-activation target variables. Shape (time_steps, batch_size, output_dim).
             a_prev: Previous cell (pre-post-cell) activation. If None, will be initialized in cell.
             c_prev: Previous cell state. If None, will be initialized in cell.
+        
+        Returns:
+            states: List of dictionaries of cell states.
+            caches: List of dictionaries of cell activation function inputs.
+            preds: Network predictions.
+            targets: Unchanged target variable (pass through)
         """
         states, caches, preds = [], [], []
         x = [x[t,:,:] for t in range(x.shape[0])]
@@ -46,13 +52,18 @@ class LSTM:
         return states, caches, np.stack(preds), np.stack(y)
 
     def backward(self, states, caches, preds, targets):
-        """Backprop.
-        Inputs:
+        """Network backprop.
+        Updates parameters of cell and activation function.
+        Args:
             states: list of dictionaries containing states from LSTM_unit
             caches: caches, not needed - prime for a refactor
             preds: list of predictions (y_hat) of shape (output_dim, batch_size)
             targets: list of labels with the same shape as preds
             grad_check: if True, cell will store pre-clipped grads in cell.grads on param update
+        
+        Returns:
+            preds: network predictions, unchanged (pass-through)
+            targets: target variable, unchanged (pass-through)
         """
         d_loss = self.dloss(preds, targets)
         das = [self.activation.backward(d_loss[t]).T for t in range(d_loss.shape[0])]
@@ -75,13 +86,13 @@ class LSTM:
 
 class LSTM_unit:
     """Class for LSTM cell.
-    Inputs:
-        hidden_dim: Size of the hidden layer
-        x_dim: Size of network inputs
-        init: Initialization function, should take a (two) tuple of integers x and y 
-            as input and return an array of shape (x, y)
-        grad_clip: Gradients will be clipped between -value and value. Pass None to disable clipping 
-        peephole: Whether to use a peephole connection, boolean
+    Args:
+        hidden_dim: Size of the hidden layer.
+        x_dim: Size of network inputs.
+        init: Initialization function, should take a (two) tuple of integers x and y.
+            as input and return an array of shape (x, y).
+        grad_clip: Gradients will be clipped between -value and value. Pass None to disable clipping.
+        peephole: Whether to use a peephole connection, boolean.
     """
     def __init__(self, hidden_dim, x_dim, init=xavier_init, peephole=True, learning_rate=1e-4, grad_check=False):
         #TODO figure out peephole again or scrap it
@@ -115,6 +126,16 @@ class LSTM_unit:
         }   
 
     def forward(self, x, a_prev, c_prev):
+        """Cell forward.
+        Args:
+            x: Input data.
+            a_prev: Activation at t-1.
+            c_prev: Cell state at t-1.
+
+        Returns:
+            state: Dictionary of states of the different activations at t.
+            cache: Dictionary of gate activation function inputs.
+        """
         a_prev = a_prev if a_prev is not None else np.zeros((self.hidden_dim, x.shape[0]))
         c_prev = c_prev if c_prev is not None else np.zeros((self.hidden_dim, x.shape[0]))
         
@@ -132,6 +153,17 @@ class LSTM_unit:
         return state, cache
 
     def backward(self, state, da_next, dc_next):
+        """Cell backward.
+        Args:
+            state: Cell state at t.
+            da_next: Activation gradient of cell t (gradient w.r.t activation input to t+1).
+            dc_next: Cell state gradient of cell t (gradient w.r.t cell input to t+1).
+
+        Returns:
+            da_in: Activation gradient of cell t-1 (gradient w.r.t activation input to t).
+            dc_in: Cell state gradient of cell t-1 (gradient w.r.t cell input to t).
+            grads: Dictionary of gate gradients for updating params.
+        """
         dc_out = state['o'] * da_next * d_tanh(state['c_out']) + dc_next
         grads = self.init_grads()
 
