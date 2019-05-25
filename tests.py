@@ -4,7 +4,7 @@ import random
 import numpy as np
 
 from functions import Dense, L2_loss, d_sigmoid, d_tanh, sigmoid, tanh
-from lstm import LSTM, LSTM_unit
+from lstm import LSTM, LSTM_Cell
 
 TEST_COUNT = 2 # How many times most tests are ran
 def random_params():
@@ -111,7 +111,7 @@ def _cell_forward_calcs():
         time_steps, hidden_dim, output_dim, x_dim, n_examples, batch_size = random_params()
 
         arr = np.random.randn(n_examples, x_dim)
-        cell = LSTM_unit(hidden_dim, x_dim)
+        cell = LSTM_Cell(hidden_dim, x_dim)
         a_prev = None
         c_prev = None
         for i in range(30):
@@ -138,17 +138,17 @@ def test_grads():
         for _, p in net.cell.params.items():
             p['w'] += delta
             p['b'] += delta
-        plus_loss = np.array(net.epoch(arr, targets))
+        plus_loss = np.array(net.fit(arr, targets))
         for _, p in net.cell.params.items():
             p['w'] -= 2 * delta
             p['b'] -= 2 * delta
-        minus_loss = np.array(net.epoch(arr, targets))
+        minus_loss = np.array(net.fit(arr, targets))
         print(plus_loss.shape, minus_loss.shape)
         num_grad = (plus_loss - minus_loss) * (0.5 * delta)
         print(num_grad.shape)
         net.cell.learning_rate = delta
-        base_loss = np.array(net.epoch(arr, targets))
-        updated_loss = np.array(net.epoch(arr, targets))
+        base_loss = np.array(net.fit(arr, targets))
+        updated_loss = np.array(net.fit(arr, targets))
         assert not np.array_equal(base_loss, updated_loss)
         analytical_grad = updated_loss - base_loss
         tr = abs(num_grad - analytical_grad) < 1e-6
@@ -172,10 +172,10 @@ def get_num_grad(net, param, idx, delta, arr, targets):
     paramcopy = copy.deepcopy(net.cell.params)
     singlecopy = param.flat[idx]
     param.flat[idx] = singlecopy + delta
-    plus_loss = net.epoch(arr, targets)[-1]
+    plus_loss = net.fit(arr, targets)[-1]
     net.cell.params = paramcopy
     param.flat[idx] = singlecopy - delta
-    minus_loss = net.epoch(arr, targets)[-1]
+    minus_loss = net.fit(arr, targets)[-1]
     param.flat[idx] = singlecopy
     num_grad = (plus_loss - minus_loss) / (2 * delta)
     return num_grad
@@ -187,8 +187,8 @@ def _lstm_grads():
      x_dim, n_examples, batch_size) = random_params()
     arr = np.random.randn(time_steps, 1, x_dim)
     targets = np.random.randn(time_steps, 1, 1)
-    net = LSTM(hidden_dim, x_dim, output_dim=1, grad_clip=None, grad_check=True, learning_rate=1e-15)
-    _ = net.epoch(arr, targets)
+    net = LSTM(hidden_dim, x_dim, output_dim=1, grad_clip=None, store_grads=True, learning_rate=1e-15)
+    _ = net.fit(arr, targets)
     for gate in ['c', 'u', 'o', 'f']:
         for p in ['w', 'b']:
             print(np.mean(net.cell.grads[gate][p]))

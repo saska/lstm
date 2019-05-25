@@ -1,7 +1,7 @@
 import numpy as np
 
 from functions import (L2_loss, d_sigmoid, d_tanh, sigmoid,
-                       tanh, xavier_init, Dense)
+                       tanh, xavier_init, Dense, L2_reg)
 
 class LSTM:
     """Class for LSTM network.
@@ -14,11 +14,11 @@ class LSTM:
         init: initialization function, should take two dimensions x and y (integers) 
             as input and return an array of shape x, y. Passed to the LSTM cell.
         peephole: whether to use a peephole connection, boolean. Passed to the LSTM cell.
-        grad_check: if True, cell will store pre-clipped grads in cell.grads on param update.
+        store_grads: if True, cell will store pre-clipped grads in cell.grads on param update.
     """
     def __init__(self, hidden_dim, x_dim, learning_rate=1e-4, output_dim=1, grad_clip=None,
-                       loss=L2_loss, activation=Dense, init=xavier_init, peephole=True, grad_check=False):
-        self.cell = LSTM_unit(hidden_dim, x_dim, init=init, peephole=peephole, learning_rate=learning_rate, grad_check=grad_check)
+                       loss=L2_loss, activation=Dense, init=xavier_init, store_grads=False):
+        self.cell = LSTM_Cell(hidden_dim, x_dim, init=init, learning_rate=learning_rate, store_grads=store_grads)
         self.learning_rate = learning_rate
         self.grad_clip = grad_clip
         self.loss = loss.loss
@@ -55,11 +55,11 @@ class LSTM:
         """Network backprop.
         Updates parameters of cell and activation function.
         Args:
-            states: list of dictionaries containing states from LSTM_unit
+            states: list of dictionaries containing states from LSTM_Cell
             caches: caches, not needed - prime for a refactor
             preds: list of predictions (y_hat) of shape (output_dim, batch_size)
             targets: list of labels with the same shape as preds
-            grad_check: if True, cell will store pre-clipped grads in cell.grads on param update
+            store_grads: if True, cell will store pre-clipped grads in cell.grads on param update
         
         Returns:
             preds: network predictions, unchanged (pass-through)
@@ -80,30 +80,30 @@ class LSTM:
         self.activation.update_params()
         return preds, targets
         
-    def epoch(self, x, targets, a_prev=None, c_prev=None):
+    def fit(self, x, targets, a_prev=None, c_prev=None):
         preds, targets = self.backward(*self.forward(x, targets, a_prev=a_prev, c_prev=c_prev))
         return np.stack([self.loss(pred, yt) for pred, yt in zip(preds, targets)])
 
-class LSTM_unit:
+class LSTM_Cell:
     """Class for LSTM cell.
     Args:
         hidden_dim: Size of the hidden layer.
         x_dim: Size of network inputs.
         init: Initialization function, should take a (two) tuple of integers x and y.
             as input and return an array of shape (x, y).
-        grad_clip: Gradients will be clipped between -value and value. Pass None to disable clipping.
-        peephole: Whether to use a peephole connection, boolean.
+        learning_rate: learning rate.
+        store_grads: If True, gradients will be stored in self.grads.
+            No effect on computation, use if you need to take a peek.
     """
-    def __init__(self, hidden_dim, x_dim, init=xavier_init, peephole=True, learning_rate=1e-4, grad_check=False):
-        #TODO figure out peephole again or scrap it
+    def __init__(self, hidden_dim, x_dim, init=xavier_init, 
+                       learning_rate=1e-4, store_grads=False):
         self.hidden_dim = hidden_dim
         self.x_dim = x_dim
         self.concat_dim = hidden_dim + x_dim
         self.init = init
         self.init_params()
-        self.peephole = peephole
         self.learning_rate = learning_rate
-        self.grad_check = grad_check
+        self.store_grads = store_grads
         self.funcs = {
             'c': {'a': tanh, 'd': d_tanh},
             'u': {'a': sigmoid, 'd': d_sigmoid},
@@ -183,7 +183,7 @@ class LSTM_unit:
         return da_in, dc_in, grads
 
     def update_params(self, grads, clip=None):
-        if self.grad_check:
+        if self.store_grads:
             self.grads = grads
         for gate in ['c', 'u', 'o', 'f']:
             if clip is not None:

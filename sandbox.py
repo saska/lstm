@@ -49,7 +49,7 @@ def simplefunc():
         start = time.time()
         loss = 0
         for data, targets in minibatch_gen(x, y, batch_size):
-            loss += np.mean(net.epoch(data, targets))
+            loss += np.mean(net.fit(data, targets))
         losses.append(loss)
         print('Epoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
     
@@ -91,7 +91,7 @@ def quandltest():
         start = time.time()
         x = batch[:-1,:,:]
         y = batch[1:,:,:]
-        loss = np.sum(net.epoch(x, y))
+        loss = np.sum(net.fit(x, y))
         print('Epoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
         if i != 0 and i % 5000 == 0:
             with open('amd_intel_net.pkl', 'wb') as f:
@@ -125,7 +125,7 @@ def quandl_nat_gas_vs_crude():
         start = time.time()
         x = batch[:-1,:,:]
         y = batch[1:,:,:]
-        loss = np.sum(net.epoch(x, y))
+        loss = np.sum(net.fit(x, y))
         print('Epoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
         if i != 0 and i % 5000 == 0:
             with open('crude_vs_nat.pkl', 'wb') as f:
@@ -212,7 +212,7 @@ def stora_upm_pair():
     for i in range(5000):
         start = time.time()
         loss = 0
-        loss += np.mean(net.epoch(data, targets))
+        loss += np.mean(net.fit(data, targets))
         losses.append(loss)
         print('Epoch {}: loss: {} time: {}'.format(i, loss, time.time() - start), end='\r', flush=True)
         if i % 500 == 0:

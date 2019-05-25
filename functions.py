@@ -36,6 +36,14 @@ class CrossEntropyLoss:
     def dloss(self, y_hat, y):
         return -(np.divide(y, y_hat) - np.divide(1-y, 1-y_hat))
 
+class L2_reg:
+    def __init__(self, lambda_):
+        self.lambda_ = lambda_
+
+    def regularize(self, weights):
+        return (weights 
+                + np.square(weights) 
+                * (self.lambda_ / (2 * weights.shape[0] * weights.shape[1])))
 
 class Unit_activation:
     def __init__(self, *args):
